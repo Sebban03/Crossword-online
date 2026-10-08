@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#2f6fd6">
+<title>Krzyżówka Duel</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef3fa;--ink:#16213b;--mut:#5f6b86;--line:#9fb0cc;--cell:#fff;--clue:#d3e3f7;--clueInk:#1d2b4f;--hl:#fff3b0;--sel:#ffd23f;--card:#fff;--me:#2f6fd6;--op:#d6407f;--tile:#f6dfb8;--tileInk:#2a1f0e;--ok:#1f9d55;--bad:#d92d20;--s:44px}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1526;--ink:#e8edf9;--mut:#8f99b2;--line:#34405f;--cell:#1b2440;--clue:#26365e;--clueInk:#dbe5ff;--hl:#4a4620;--sel:#7d6a14;--card:#161e37;--me:#6f97ff;--op:#ff6fae;--tile:#5a4a2e;--tileInk:#fff3dc}}
+:root[data-theme="dark"]{--bg:#0f1526;--ink:#e8edf9;--mut:#8f99b2;--line:#34405f;--cell:#1b2440;--clue:#26365e;--clueInk:#dbe5ff;--hl:#4a4620;--sel:#7d6a14;--card:#161e37;--me:#6f97ff;--op:#ff6fae;--tile:#5a4a2e;--tileInk:#fff3dc}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button{font:700 15px system-ui,sans-serif;background:var(--me);color:#fff;border:0;border-radius:12px;padding:12px 16px;cursor:pointer;touch-action:manipulation}
+button.sec{background:transparent;color:var(--ink);border:2px solid var(--line)}
+button:disabled{opacity:.35;cursor:default}
+button:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
+[hidden]{display:none!important}
+h1{font:800 clamp(30px,8vw,44px)/1 "Bricolage Grotesque",system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+/* menu */
+.menu{max-width:440px;margin:0 auto;padding:max(24px,env(safe-area-inset-top)) 16px 24px;display:grid;gap:14px}
+.menu .sub{margin:0;color:var(--mut)}
+.box{background:var(--card);border-radius:16px;padding:16px;display:grid;gap:12px;box-shadow:0 1px 0 rgba(0,0,0,.05)}
+.box h2{margin:0;font-size:15px;color:var(--mut);font-weight:700}
+input.t{font:600 17px system-ui,sans-serif;padding:12px 14px;border-radius:12px;border:2px solid var(--line);background:var(--cell);color:var(--ink);width:100%;min-width:0}
+input.up{text-transform:uppercase;letter-spacing:.2em}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.lv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lv button{background:var(--cell);color:var(--ink);border:2px solid var(--line);padding:10px 6px;display:grid;gap:2px;font-size:14px}
+.lv button small{font-weight:600;color:var(--mut);font-size:11px}
+.lv button[aria-pressed="true"]{border-color:var(--me);background:color-mix(in srgb,var(--me) 14%,var(--cell))}
+.dots{letter-spacing:2px;color:var(--op);font-size:10px}
+#msg{min-height:1.3em;color:var(--bad);margin:0;font-weight:600}
+.mode{font-size:12px;color:var(--mut);text-align:center;margin:0}
+/* game */
+.game{height:100dvh;display:flex;flex-direction:column;align-items:center;padding:max(6px,env(safe-area-inset-top)) 8px max(8px,env(safe-area-inset-bottom));gap:6px;overflow:hidden}
+.top{width:100%;max-width:560px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.pl{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.pl.r{align-items:flex-end}
+.pl span{font-size:12px;font-weight:700;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pl b{font:800 22px/1 "Bricolage Grotesque",system-ui,sans-serif;padding:4px 14px;border-radius:10px;border:2px solid var(--line);background:var(--card);min-width:56px;text-align:center}
+.pl.me b{color:var(--me)}.pl.op b{color:var(--op)}
+.pl.act b{border-color:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 25%,transparent)}
+.mid{text-align:center}
+.timer{font:800 24px/1 "Bricolage Grotesque",system-ui,sans-serif}
+.timer.low{color:var(--bad)}
+.turn{font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.g{display:grid;gap:0;border:2px solid var(--line);background:var(--line);user-select:none;-webkit-user-select:none;touch-action:manipulation;flex:none}
+.c{width:var(--s);height:var(--s);background:var(--cell);border-right:1px solid var(--line);border-bottom:1px solid var(--line);position:relative;display:grid;place-items:center;font:800 calc(var(--s)*.56)/1 system-ui,sans-serif;cursor:pointer;color:var(--ink)}
+.c.q{background:var(--clue);color:var(--clueInk);cursor:pointer;display:flex;flex-direction:column;padding:0;font:inherit}
+.c.q.blank{cursor:default;background:color-mix(in srgb,var(--clue) 55%,var(--line))}
+.p{flex:1;min-height:0;width:100%;display:flex;align-items:safe center;justify-content:center;text-align:center;font:700 calc(var(--s)*.19)/1.05 system-ui,sans-serif;text-transform:uppercase;padding:1px 2px;overflow:hidden;overflow-wrap:normal;hyphens:manual;position:relative}
+.p.brk{overflow-wrap:anywhere}
+.p span{display:block;max-width:100%}
+.p+.p{border-top:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.p.emo{font-size:calc(var(--s)*.5);text-transform:none}
+.p.on{background:color-mix(in srgb,var(--sel) 55%,var(--clue))}
+.p::after{content:"";position:absolute;width:0;height:0;border:calc(var(--s)*.07) solid transparent}
+.p.a::after{right:-1px;top:50%;transform:translateY(-50%);border-left-color:var(--clueInk);border-right-width:0}
+.p.d::after{bottom:-1px;left:50%;transform:translateX(-50%);border-top-color:var(--clueInk);border-bottom-width:0}
+.c.hl{background:var(--hl)}
+.c.sl{box-shadow:inset 0 0 0 3px var(--ink);z-index:1}
+.c .tl{width:86%;height:86%;border-radius:8px;display:grid;place-items:center;background:var(--tile);color:var(--tileInk);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.c.me .tl{box-shadow:inset 0 -4px 0 var(--me),0 2px 0 rgba(0,0,0,.18)}
+.c.op .tl{box-shadow:inset 0 -4px 0 var(--op),0 2px 0 rgba(0,0,0,.18)}
+.c.pend .tl{background:transparent;color:var(--me);box-shadow:inset 0 0 0 3px var(--me)}
+.c.ghost{color:color-mix(in srgb,var(--ink) 30%,transparent);font-style:italic}
+.c.flash .tl{animation:fl .9s}
+@keyframes fl{0%,40%{transform:scale(1.15)}}
+@media(prefers-reduced-motion:reduce){.c.flash .tl{animation:none}}
+.board{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%}
+.panel{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;max-width:560px}
+@media (min-width:760px) and (min-aspect-ratio:1/1){.board{flex-direction:row;justify-content:center;align-items:center;gap:24px;flex:1}.panel{width:340px;gap:12px}.top{max-width:900px}}
+.strip{width:100%;max-width:560px;min-height:38px;background:var(--card);border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+.strip i{font-style:normal;color:var(--me);font-size:18px}
+.strip em{font-style:normal;color:var(--mut);margin-left:auto;font-size:13px;white-space:nowrap}
+.rack{display:flex;gap:8px;justify-content:center;min-height:52px}
+.tile{width:52px;height:52px;padding:0;font:800 26px system-ui,sans-serif;background:var(--tile);color:var(--tileInk);border-radius:12px;box-shadow:0 3px 0 rgba(0,0,0,.25)}
+.tile.on{outline:3px solid var(--me);outline-offset:1px;transform:translateY(-3px)}
+.tile.used{opacity:.2}
+.waitmsg{font-weight:700;color:var(--mut);align-self:center}
+.acts{display:flex;gap:8px;width:100%;max-width:560px}
+.acts button{flex:1;padding:11px 8px}
+.acts .x{flex:0 0 auto}
+.log{font-size:12px;color:var(--mut);min-height:1em;text-align:center;margin:0}
+.lobby{flex:1;display:grid;place-content:center;text-align:center;gap:10px;max-width:420px}
+.code{font:800 56px/1 "Bricolage Grotesque",system-ui,sans-serif;letter-spacing:.2em;color:var(--me)}
+.end{position:fixed;inset:0;background:rgba(10,14,28,.6);display:grid;place-items:center;padding:20px;z-index:5}
+.end>div{background:var(--card);border-radius:16px;padding:24px;text-align:center;max-width:340px;display:grid;gap:10px}
+.end h2{font:800 30px/1.1 "Bricolage Grotesque",system-ui,sans-serif;margin:0}
+.end p{margin:0;color:var(--mut)}
+.rules{font-size:13px;color:var(--mut)}
+.rules summary{cursor:pointer;font-weight:700;color:var(--ink)}
+.rules ul{padding-left:18px;margin:8px 0 0}
+</style>
+</head>
+<body>
+<section id="menu" class="menu">
+  <h1>Krzyżówka Duel</h1>
+  <p class="sub">Turowa krzyżówka panoramiczna dla dwóch osób, każda na swoim urządzeniu.</p>
+  <div class="box">
+    <input id="nm" class="t" maxlength="12" placeholder="Twoje imię" autocomplete="off">
+  </div>
+  <div class="box">
+    <h2>Nowa gra</h2>
+    <div id="lv" class="lv"></div>
+    <button id="mk">Utwórz grę i pokaż kod</button>
+    <button id="hs" class="sec">Gra na jednym urządzeniu</button>
+  </div>
+  <div class="box">
+    <h2>Dołącz do gry</h2>
+    <div class="row"><input id="code" class="t up" maxlength="5" placeholder="KOD" autocomplete="off" inputmode="text"><button id="jn">Dołącz</button></div>
+  </div>
+  <p id="msg" role="status"></p>
+  <details class="rules"><summary>Zasady</summary><ul>
+    <li>Tura trwa 2 minuty. Dostajesz 5 losowych liter, które gdzieś pasują do planszy.</li>
+    <li>Wybierz kratkę i literę (albo odwrotnie). Na komputerze możesz pisać z klawiatury.</li>
+    <li>+1 za dobrą literę, −1 za złą (zła znika z planszy).</li>
+    <li>Dokończenie hasła daje premię zależną od długości.</li>
+    <li>Wszystkie litery bez błędu dwie tury z rzędu dają premię za serię.</li>
+    <li>Gdy przez kilka tur nikt nie robi postępu, gra podpowiada jedno hasło obu graczom.</li>
+  </ul></details>
+  <p id="mode" class="mode"></p>
+</section>
+
+<section id="game" class="game" hidden>
+  <div class="top">
+    <div id="p0" class="pl me"><span id="n0"></span><b id="s0">0</b></div>
+    <div class="mid"><div id="tm" class="timer">2:00</div><div id="tn" class="turn"></div></div>
+    <div id="p1" class="pl op r"><span id="n1"></span><b id="s1">0</b></div>
+  </div>
+  <div id="lobby" class="lobby" hidden>
+    <p>Kod gry dla rywala</p>
+    <div id="cd" class="code"></div>
+    <p class="sub">Rywal otwiera tę stronę na swoim telefonie lub laptopie, wpisuje kod i wybiera Dołącz. Gra wystartuje sama.</p>
+  </div>
+  <div id="board" class="board" hidden>
+    <div id="g" class="g"></div>
+    <div class="panel">
+    <div id="strip" class="strip"></div>
+    <div id="rack" class="rack"></div>
+    <div class="acts"><button id="ok">Zatwierdź</button><button id="clr" class="sec">Cofnij</button><button id="sk" class="sec">Pomiń</button></div>
+    <p id="log" class="log"></p>
+    </div>
+  </div>
+  <button id="bk" class="sec" style="padding:6px 12px;font-size:13px">Menu</button>
+</section>
+
+<div id="end" class="end" hidden><div><h2 id="et"></h2><p id="es"></p><button id="again">Wróć do menu</button></div></div>
+
+<script type="module">
+/* ===== USTAWIENIA ===== */
+// Wklej tu konfigurację z Firebase (Ustawienia projektu > Twoje aplikacje > Konfiguracja SDK).
+// Bez niej gra działa w trybie testowym: dwie karty jednej przeglądarki albo jedno urządzenie.
+const firebaseConfig = {
+  apiKey: "AIzaSyA57XhA-TCbCId43Z2yV9bq81fD8dv8f8U",
+  authDomain: "crossword-online-68520.firebaseapp.com",
+  projectId: "crossword-online-68520",
+  storageBucket: "crossword-online-68520.firebasestorage.app",
+  messagingSenderId: "770011004168",
+  appId: "1:770011004168:web:b35cb5f79152340159c0bd"
+};
+const TURN = 120;                 // sekundy na turę
+const RACK = 5;                   // liter na turę
+const SCORE = {
+  letter: 1,                      // za dobrą literę
+  wrong: -1,                      // za złą literę
+  word: L => L <= 3 ? 2 : L <= 5 ? 4 : L <= 7 ? 7 : 10,   // premia za dokończenie hasła
+  streak: n => n >= 2 ? Math.min(3 + (n - 2) * 2, 9) : 0,  // premia za serię czystych tur
+  idleTurns: 4                    // po tylu turach bez postępu jest podpowiedź
+};
+const LEVELS = [{"n": 1, "name": "Rozgrzewka", "W": 7, "H": 8, "G": ["#######", "#......", "#.#.#.#", "#......", "##.#.#.", "#......", "#.#....", "#...#.."], "s": [[0, 1, 1, "LUSTRO", "🪞"], [0, 3, 1, "TALENT", "Dar, zdolność"], [0, 5, 1, "UTRATA", "Strata"], [0, 6, 3, "WPIS", "Notka w księdze"], [0, 7, 1, "OSA", "Owad z żądłem"], [0, 7, 5, "KA", "Litera K"], [1, 1, 1, "LOT", "✈️"], [1, 5, 1, "UDO", "Część nogi"], [1, 3, 2, "ALT", "Niski głos żeński"], [1, 1, 3, "SÓL", "🧂"], [1, 5, 3, "RWA", "… kulszowa"], [1, 3, 4, "ETAP", "Faza, odcinek"], [1, 1, 5, "REN", "Rzeka w Niemczech"], [1, 5, 5, "TIK", "Nerwowy odruch"], [1, 3, 6, "TRASA", "Droga przejazdu"]]}, {"n": 2, "name": "Łatwy", "W": 7, "H": 8, "G": ["#######", "#.#....", "#....#.", "#.#....", "#...#.#", "#.#....", "#....#.", "#.#...."], "s": [[0, 1, 3, "KASK", "⛑️"], [0, 2, 1, "BLOG", "Pamiętnik w sieci"], [0, 3, 3, "SALA", "Duże pomieszczenie"], [0, 4, 1, "WÓZ", "Ciągnie go koń"], [0, 5, 3, "MOST", "🌉"], [0, 6, 1, "ATAK", "Natarcie"], [0, 7, 3, "ROCK", "🎸 gatunek"], [1, 1, 1, "OBAWIAĆ", "… się, bać się"], [1, 1, 3, "KOSZMAR", "Zły sen"], [1, 1, 4, "AGA", "Agnieszka, zdrobniale"], [1, 5, 4, "OKO", "👁️"], [1, 3, 5, "LOS", "Bilet loterii"], [1, 1, 6, "KRA", "Lód płynący rzeką"], [1, 5, 6, "TIK", "Nerwowy odruch"]]}, {"n": 3, "name": "Średni", "W": 8, "H": 9, "G": ["########", "##.#....", "#....#..", "#..#....", "#....#.#", "##.#....", "#.....#.", "#.#.....", "#...#..."], "s": [[0, 1, 4, "MŁOT", "🔨"], [0, 2, 1, "ŻABA", "Kumka w stawie"], [0, 2, 6, "SI", "Nuta po LA"], [0, 3, 1, "ES", "Litera po ER"], [0, 3, 4, "SKOK", "W dal lub wzwyż"], [0, 4, 1, "LIPA", "Bujda, potocznie"], [0, 5, 4, "KLAN", "Ród szkocki"], [0, 6, 1, "AGORA", "Plac w polis"], [0, 7, 3, "KATAR", "🤧"], [0, 8, 1, "TŁO", "Podkład obrazu"], [0, 8, 5, "OSA", "Owad z żądłem"], [1, 2, 1, "ŻEL", "Koloid"], [1, 6, 1, "ALT", "Niski głos żeński"], [1, 1, 2, "ZASIĘG", "Promień działania"], [1, 6, 3, "OKO", "👁️"], [1, 1, 4, "MASAKRA", "Jatka"], [1, 5, 5, "LATO", "☀️ pora roku"], [1, 1, 6, "OSOBA", "Jednostka ludzka"], [1, 7, 6, "AS", "Najwyższa karta"], [1, 1, 7, "TIK", "Mimowolny skurcz"], [1, 5, 7, "NORA", "Dom lisa"]]}, {"n": 4, "name": "Wymagający", "W": 8, "H": 9, "G": ["########", "#.#.....", "#....#..", "#.#.....", "#....#.#", "#.#.#...", "##....#.", "#...#...", "##......"], "s": [[0, 1, 3, "BONGO", "Małe bębenki"], [0, 2, 1, "ETAP", "Odcinek wyścigu"], [0, 2, 6, "ES", "Litera S"], [0, 3, 3, "SIGMA", "Σ"], [0, 4, 1, "PIES", "🐕"], [0, 5, 5, "PAS", "Rzemień"], [0, 6, 2, "MAIL", "📧"], [0, 7, 1, "GIL", "Zimowy ptak"], [0, 7, 5, "AGA", "Agnieszka, zdrobniale"], [0, 8, 2, "TLENEK", "Rdza chemicznie"], [1, 1, 1, "TEMPO", "Szybkość"], [1, 6, 2, "MIT", "Opowieść o Zeusie"], [1, 1, 3, "BASEBALL", "⚾"], [1, 1, 4, "OPIS", "Deskrypcja"], [1, 5, 5, "PLAN", "Zamiar"], [1, 1, 6, "GEMMA", "Pąk (biol.)"], [1, 7, 6, "GE", "Litera G"], [1, 1, 7, "OSA", "Żądli latem"], [1, 5, 7, "SMAK", "Słodki lub kwaśny"]]}, {"n": 5, "name": "Trudny", "W": 8, "H": 10, "G": ["########", "#.......", "#.#.#.#.", "#.......", "##.#.#.#", "#.......", "#.#...#.", "#...#...", "##...#..", "#...#..."], "s": [[0, 1, 1, "CELIBAT", "Wymóg dla księży"], [0, 3, 1, "OBNOSIĆ", "Afiszować się"], [0, 5, 1, "AGREGAT", "Zespół maszyn"], [0, 6, 3, "ETA", "Grecka litera Η"], [0, 7, 1, "TOK", "Przebieg"], [0, 7, 5, "DOM", "Cztery kąty"], [0, 8, 2, "SIR", "Brytyjski rycerz"], [0, 8, 6, "KA", "Litera po J"], [0, 9, 1, "VAN", "Auto dostawcze"], [0, 9, 5, "LOT", "Rejs samolotem"], [1, 1, 1, "CŁO", "Danina celna"], [1, 5, 1, "ALT", "Głos w chórze"], [1, 3, 2, "BÓG", "Stwórca"], [1, 7, 2, "OSA", "Żądli latem"], [1, 1, 3, "LEN", "Roślina włóknista"], [1, 5, 3, "REKIN", "Ludojad mórz"], [1, 3, 4, "OCET", "Kwas spożywczy"], [1, 1, 5, "BUS", "Minibus"], [1, 5, 5, "GAD", "Krokodyl, gromada"], [1, 3, 6, "IWA", "Wierzba iwa"], [1, 7, 6, "OKO", "Narząd wzroku"], [1, 1, 7, "TYĆ", "Grubnąć"], [1, 5, 7, "TEMAT", "Przedmiot rozmowy"]]}, {"n": 6, "name": "Ekspert", "W": 8, "H": 10, "G": ["########", "#.#.....", "#....#.#", "#.#.....", "#.....#.", "##.#....", "#...#...", "#.#....#", "#...#...", "#.#....."], "s": [[0, 1, 3, "SALSA", "Ostry sos"], [0, 2, 1, "LITR", "Tysiąc mililitrów"], [0, 3, 3, "AMINA", "Pochodna NH₃"], [0, 4, 1, "REŻIM", "Rygor"], [0, 5, 4, "APKA", "Aplikacja"], [0, 6, 1, "KAC", "Stan po libacji"], [0, 6, 5, "RAK", "Znak zodiaku"], [0, 7, 3, "OMEN", "Wróżba"], [0, 8, 1, "SÓL", "Chlorek sodu"], [0, 8, 5, "ZOO", "Ogród zoologiczny"], [0, 9, 3, "TRANS", "Stan uniesienia"], [1, 1, 1, "KLER", "Duchowieństwo"], [1, 6, 1, "KASK", "Chroni głowę"], [1, 4, 2, "ERA", "Mezozoiczna"], [1, 1, 3, "STAŻ", "Okres praktyki"], [1, 6, 3, "COLT", "Broń kowboja"], [1, 1, 4, "ARMIA", "Siły zbrojne"], [1, 3, 5, "IMPREZA", "Balanga"], [1, 1, 6, "SYN", "Dziedzic rodu"], [1, 5, 6, "KANON", "Utwór na głosy"], [1, 3, 7, "ATAK", "Ofensywa"], [1, 8, 7, "OS", "Wał ze żwiru"]]}];
+
+/* ===== MAGAZYN STANU ===== */
+const ls = { g:k=>{try{return localStorage.getItem(k)}catch{return null}}, s:(k,v)=>{try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch{}} };
+const ss = { g:k=>{try{return sessionStorage.getItem(k)}catch{return null}}, s:(k,v)=>{try{v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v)}catch{}} };
+const clone = o => JSON.parse(JSON.stringify(o));
+
+async function firebaseStore(cfg){
+  const V='10.12.2';
+  const {initializeApp}=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+  const F=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+  const db=F.getFirestore(initializeApp(cfg));
+  const ref=c=>F.doc(db,'games',c);
+  return {
+    name:'online (Firebase)',
+    async create(c,data){return F.runTransaction(db,async t=>{const s=await t.get(ref(c));if(s.exists())return false;t.set(ref(c),data);return true})},
+    async tx(c,fn){return F.runTransaction(db,async t=>{const s=await t.get(ref(c));if(!s.exists())return null;const p=fn(s.data());if(p)t.update(ref(c),p);return p})},
+    watch(c,cb,err){return F.onSnapshot(ref(c),s=>cb(s.exists()?s.data():null),e=>err&&err(e))}
+  };
+}
+async function claudeStore(){
+  if(!window.claude||!claude.use)return null;
+  const db=await claude.use('db').catch(()=>null);if(!db)return null;
+  const ref=c=>db.doc('kdgames/'+c);
+  return {
+    name:'online (Claude)',
+    async create(c,data){if((await ref(c).get()).exists)return false;await ref(c).set(data);return true},
+    async tx(c,fn){const s=await ref(c).get();if(!s.exists)return null;const p=fn(clone(s.data()));if(p)await ref(c).update(p);return p},
+    watch(c,cb,err){return ref(c).onSnapshot(s=>cb(s.exists?clone(s.data()):null),e=>err&&err(e))}
+  };
+}
+function localStore(){
+  const key=c=>'kd:'+c,subs=new Map();let bc=null;try{bc=new BroadcastChannel('kd')}catch{}
+  const read=c=>{try{return JSON.parse(ls.g(key(c))||'null')}catch{return null}};
+  const ping=c=>{(subs.get(c)||[]).forEach(f=>f(read(c)));};
+  const write=(c,d)=>{ls.s(key(c),JSON.stringify(d));ping(c);bc&&bc.postMessage(c)};
+  addEventListener('storage',e=>{if(e.key&&e.key.startsWith('kd:'))ping(e.key.slice(3))});
+  bc&&(bc.onmessage=e=>ping(e.data));
+  return {
+    name:'testowy (to urządzenie)',
+    async create(c,d){if(read(c))return false;write(c,d);return true},
+    async tx(c,fn){const d=read(c);if(!d)return null;const p=fn(d);if(p){write(c,Object.assign(d,p))}return p},
+    watch(c,cb){const a=subs.get(c)||[];a.push(cb);subs.set(c,a);setTimeout(()=>cb(read(c)));return()=>subs.set(c,(subs.get(c)||[]).filter(f=>f!==cb))}
+  };
+}
+
+/* ===== GRA ===== */
+const $=id=>document.getElementById(id);
+const myId=ss.g('kd:id')||Math.random().toString(36).slice(2,10);ss.s('kd:id',myId);
+let store,code,G,me,lvl,unsub,lastT=-1,t0=0,pend={},selT=null,sel=null,busy=false,retryAt=0,chosen=+(ls.g('kd:lv')||1),flash=new Set();
+
+function prep(L){
+  if(L.ready)return L;
+  const {W,H}=L;L.sol=Array(W*H).fill(null);L.slots=L.s.map(([d,r,c,w,q],i)=>{const idx=[...w].map((_,k)=>(r+k*d)*W+c+k*(1-d));idx.forEach((x,k)=>L.sol[x]=w[k]);return{i,d,r,c,w,q,idx,len:[...w].length,clue:d?(r-1)*W+c:r*W+c-1}});
+  [...L.slots].forEach(s=>s.w=[...s.w]);
+  L.clueAt={};L.slots.forEach(s=>(L.clueAt[s.clue]=L.clueAt[s.clue]||[]).push(s));
+  Object.values(L.clueAt).forEach(a=>a.sort((x,y)=>x.d-y.d));
+  L.total=L.sol.filter(Boolean).length;L.ready=true;return L;
+}
+const empty=i=>G.fill[i]==='.';
+const slotDone=(s,f=G.fill)=>s.idx.every(i=>f[i]!=='.');
+const used=k=>Object.values(pend).includes(k);
+const letters=()=>Object.fromEntries(Object.entries(pend).map(([i,k])=>[i,G.rack[k]]));
+const nm=()=>{const v=$('nm').value.trim().slice(0,12)||'Gracz';ls.s('kd:nm',v);return v};
+const say=t=>$('msg').textContent=t;
+
+function draw(L,f){
+  const a=[];for(let i=0;i<L.sol.length;i++)if(L.sol[i]&&f[i]==='.')a.push(L.sol[i]);
+  for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}
+  return a.slice(0,RACK);
+}
+function fresh(L,p){return{lvl:L.n,p,st:p[1]?'play':'wait',t:p[1]?1:0,cur:0,fill:'.'.repeat(L.W*L.H),own:'.'.repeat(L.W*L.H),sc:[0,0],sk:[0,0],rack:p[1]?draw(L,'.'.repeat(L.W*L.H)):[],idle:0,hint:-1,log:p[1]?'Gra się rozpoczęła':'',hot:!!p[1]&&p[1].id===p[0].id}}
+
+async function create(hot){
+  say('');const L=prep(LEVELS[chosen-1]);const A='ABCDEFGHJKLMNPRSTUWXYZ';
+  try{
+    for(let k=0;k<8;k++){
+      const c=Array.from({length:4},()=>A[Math.random()*A.length|0]).join('');
+      const p=hot?[{id:myId,n:'Gracz 1'},{id:myId,n:'Gracz 2'}]:[{id:myId,n:nm()},null];
+      if(await store.create(c,fresh(L,p)))return enter(c);
+    }
+    say('Nie udało się utworzyć gry, spróbuj ponownie');
+  }catch(e){say('Błąd połączenia: '+(e.message||e))}
+}
+async function join(){
+  const c=$('code').value.trim().toUpperCase();if(!/^[A-Z0-9]{3,5}$/.test(c))return say('Wpisz kod gry');
+  say('');let why='Nie ma takiej gry';
+  try{
+    const r=await store.tx(c,g=>{
+      if(g.p.some(x=>x&&x.id===myId)){why='';return null}
+      if(g.p[1]){why='Ta gra ma już dwóch graczy';return null}
+      const L=prep(LEVELS[g.lvl-1]);why='';
+      return{p:[g.p[0],{id:myId,n:nm()}],st:'play',t:1,cur:Math.random()<.5?0:1,rack:draw(L,g.fill),log:'Gra się rozpoczęła'};
+    });
+    if(r||why==='')return enter(c);say(why);
+  }catch(e){say('Błąd połączenia: '+(e.message||e))}
+}
+function enter(c){
+  code=c;ss.s('kd:game',c);unsub&&unsub();lastT=-1;
+  unsub=store.watch(c,g=>{
+    if(!g){leave();say('Gra już nie istnieje');return}
+    const hot=g.hot,i=hot?g.cur:g.p.findIndex(x=>x&&x.id===myId);if(i<0){leave();say('Nie jesteś graczem tej gry');return}
+    const newT=g.t!==lastT;
+    if(G&&newT){for(let x=0;x<g.fill.length;x++)if(G.fill[x]==='.'&&g.fill[x]!=='.')flash.add(x)}
+    G=g;me=hot?(g.st==='play'?g.cur:0):i;lvl=prep(LEVELS[g.lvl-1]);
+    if(newT){lastT=g.t;t0=Date.now();pend={};selT=null;if(!sel||!lvl.slots[sel.s]||slotDone(lvl.slots[sel.s]))sel=pickStart()}
+    build();render();setTimeout(()=>{flash.clear()},900);
+  },e=>say('Utracono połączenie: '+(e.message||e)));
+}
+function leave(){unsub&&unsub();unsub=null;G=null;lvl=null;ss.s('kd:game',null);$('end').hidden=true;$('menu').hidden=false;$('game').hidden=true}
+function pickStart(){const s=lvl.slots.find(s=>!slotDone(s))||lvl.slots[0];return{s:s.i,k:s.idx.findIndex(empty)<0?0:s.idx.findIndex(empty)}}
+
+/* ===== RUCH I PUNKTACJA ===== */
+function score(g,pl){
+  const L=prep(LEVELS[g.lvl-1]),w=g.cur,fill=[...g.fill],own=[...g.own],sc=[...g.sc],sk=[...g.sk];let ok=0,bad=0;
+  for(const k in pl){const i=+k;if(!L.sol[i]||fill[i]!=='.')continue;if(pl[k]===L.sol[i]){fill[i]=L.sol[i];own[i]=String(w);ok++}else bad++}
+  let gain=ok*SCORE.letter+bad*SCORE.wrong,words=[];
+  L.slots.forEach(s=>{if(slotDone(s,fill)&&!slotDone(s,g.fill)){gain+=SCORE.word(s.len);words.push(s.w.join(''))}});
+  sk[w]=g.rack.length>0&&ok===g.rack.length&&bad===0?sk[w]+1:0;
+  const sb=SCORE.streak(sk[w]);gain+=sb;sc[w]+=gain;
+  const f=fill.join(''),open=L.slots.filter(s=>!slotDone(s,f));
+  let idle=ok<=1?g.idle+1:0,hint=g.hint;
+  if(hint>=0&&slotDone(L.slots[hint],f))hint=-1;
+  if(idle>=SCORE.idleTurns&&open.length&&hint<0){hint=open[Math.random()*open.length|0].i;idle=0}
+  const who=g.p[w].n;
+  let log=pl&&Object.keys(pl).length?`${who}: ${ok} dobrych, ${bad} złych, ${gain>=0?'+':''}${gain} pkt`:`${who} pomija turę`;
+  if(words.length)log+=` · hasła ${words.join(', ')}`;if(sb)log+=` · seria +${sb}`;
+  return{fill:f,own:own.join(''),sc,sk,idle,hint,cur:1-w,t:g.t+1,st:open.length?'play':'end',rack:open.length?draw(L,f):[],log};
+}
+async function commit(pl,forced){
+  if(busy||!G||G.st!=='play')return;busy=true;const T=G.t;
+  try{await store.tx(code,g=>g.t!==T||g.st!=='play'?null:Object.assign(score(g,pl),forced?{log:`${g.p[g.cur].n} nie zdążył, tura przepada`}:{}))}
+  catch(e){retryAt=Date.now()+4000;$('log').textContent='Błąd zapisu, ponawiam…'}
+  finally{busy=false}
+}
+
+/* ===== WIDOK ===== */
+let built=null;
+function build(){
+  if(built===lvl.n)return;built=lvl.n;const g=$('g');g.innerHTML='';
+  g.style.gridTemplateColumns=`repeat(${lvl.W},var(--s))`;
+  for(let i=0;i<lvl.W*lvl.H;i++){
+    const d=document.createElement('div');
+    if(lvl.G[i/lvl.W|0][i%lvl.W]==='#'){
+      d.className='c q';const a=lvl.clueAt[i]||[];if(!a.length)d.classList.add('blank');
+      a.forEach(s=>{const p=document.createElement('div');p.className='p '+(s.d?'d':'a');const emo=/\p{Extended_Pictographic}/u.test(s.q)&&s.q.length<=4;if(emo)p.classList.add('emo');const sp=document.createElement('span');sp.textContent=s.q;p.append(sp);p.dataset.s=s.i;p.onclick=e=>{e.stopPropagation();choose(s.i)};d.append(p)});
+    }else{d.className='c';d.onclick=()=>tapCell(i);d.innerHTML='<div class="tl" hidden></div>'}
+    g.append(d);
+  }
+  fit();
+}
+function fit(){
+  if(!lvl)return;const vh=(window.visualViewport?.height||innerHeight),wide=matchMedia('(min-width:760px) and (min-aspect-ratio:1/1)').matches;
+  const s=Math.floor(wide?Math.min((innerWidth-400)/lvl.W,(vh-120)/lvl.H,72):Math.min((Math.min(innerWidth,600)-20)/lvl.W,(vh-285)/lvl.H,64));document.documentElement.style.setProperty('--s',Math.max(s,30)+'px');
+  requestAnimationFrame(shrink);
+}
+function shrink(){document.querySelectorAll('.p:not(.emo)').forEach(p=>{p.style.fontSize='';p.classList.remove('brk');const sp=p.firstChild,over=()=>sp.offsetHeight>p.clientHeight-1||sp.scrollWidth>p.clientWidth-2;let f=parseFloat(getComputedStyle(p).fontSize);while(over()&&f>5.5){f-=.5;p.style.fontSize=f+'px'}if(over())p.classList.add('brk')})}
+addEventListener('resize',fit);window.visualViewport&&visualViewport.addEventListener('resize',fit);
+
+function choose(si){if(!G)return;const s=lvl.slots[si];const k=s.idx.findIndex(i=>empty(i)&&pend[i]===undefined);sel={s:si,k:k<0?0:k};render()}
+function tapCell(i){
+  if(!G||G.st!=='play')return;
+  const mine=G.cur===me;
+  if(mine&&pend[i]!==undefined){delete pend[i];render();return}
+  const ss=lvl.slots.filter(s=>s.idx.includes(i));if(!ss.length)return;
+  const cur=sel&&lvl.slots[sel.s];
+  if(cur&&cur.idx[sel.k]===i&&ss.length>1){const o=ss.find(s=>s!==cur);sel={s:o.i,k:o.idx.indexOf(i)}}
+  else{const s=(cur&&ss.includes(cur))?cur:ss.find(s=>!slotDone(s))||ss[0];sel={s:s.i,k:s.idx.indexOf(i)}}
+  if(mine&&selT!==null&&empty(i)&&pend[i]===undefined){pend[i]=selT;selT=null;advance()}
+  render();
+}
+function place(k){
+  const s=lvl.slots[sel.s],i=s.idx[sel.k];
+  if(empty(i)&&pend[i]===undefined){pend[i]=k;selT=null;advance()}else{selT=selT===k?null:k}
+}
+function advance(){const s=lvl.slots[sel.s];for(let j=sel.k+1;j<s.idx.length;j++)if(empty(s.idx[j])&&pend[s.idx[j]]===undefined){sel.k=j;return}}
+function tapTile(k){if(used(k)||!sel)return;place(k);render()}
+
+function render(){
+  $('menu').hidden=!!G;$('game').hidden=!G;if(!G)return;
+  const play=G.st==='play',mine=play&&G.cur===me,op=G.p[1-me],L=lvl;
+  $('lobby').hidden=G.st!=='wait';$('board').hidden=G.st==='wait';$('cd').textContent=code;
+  $('n0').textContent=G.hot?G.p[me].n+' (tura)':G.p[me].n+' (Ty)';$('n1').textContent=op?op.n:'czekam…';
+  $('s0').textContent=G.sc[me];$('s1').textContent=G.sc[1-me];
+  $('p0').classList.toggle('act',mine);$('p1').classList.toggle('act',play&&!mine);
+  $('tn').textContent=G.st==='wait'?'Lobby':G.st==='end'?'Koniec':(mine?'Twój ruch':'Ruch rywala')+` · ${L.name}`;
+  const s=sel&&L.slots[sel.s],hs=s?new Set(s.idx):new Set(),hint=play&&G.hint>=0?L.slots[G.hint]:null,hset=hint?new Set(hint.idx):new Set();
+  const cells=$('g').children;
+  for(let i=0;i<cells.length;i++){
+    const el=cells[i];
+    if(el.classList.contains('q')){[...el.children].forEach(p=>p.classList.toggle('on',s&&+p.dataset.s===s.i));continue}
+    const f=G.fill[i],tl=el.firstChild,pd=pend[i]!==undefined;
+    el.className='c'+(f!=='.'?(G.own[i]==me?' me':' op'):pd?' pend':'')+(hs.has(i)?' hl':'')+(s&&s.idx[sel.k]===i?' sl':'')+(flash.has(i)?' flash':'')+(f==='.'&&!pd&&hset.has(i)?' ghost':'');
+    if(f!=='.'||pd){tl.hidden=false;tl.textContent=f!=='.'?f:G.rack[pend[i]];el.childNodes[1]&&el.childNodes[1].remove()}
+    else{tl.hidden=true;let t=el.childNodes[1];const gtxt=hset.has(i)?L.sol[i]:'';if(gtxt){if(!t){t=document.createTextNode('');el.append(t)}t.textContent=gtxt}else if(t)t.remove()}
+  }
+  $('strip').innerHTML='';
+  if(s){const ar=document.createElement('i');ar.textContent=s.d?'↓':'→';const tx=document.createElement('span');tx.textContent=s.q;const ln=document.createElement('em');ln.textContent=`${s.len} liter`+(hint===s?` · podpowiedź`:'');$('strip').append(ar,tx,ln)}
+  if(hint&&hint!==s){const h=document.createElement('em');h.textContent='Podpowiedź na planszy';$('strip').append(h)}
+  const rk=$('rack');rk.innerHTML='';
+  if(mine)G.rack.forEach((l,k)=>{const b=document.createElement('button');b.className='tile'+(selT===k?' on':'')+(used(k)?' used':'');b.textContent=l;b.disabled=used(k);b.onclick=()=>tapTile(k);rk.append(b)});
+  else if(play){const w=document.createElement('div');w.className='waitmsg';w.textContent=G.hot?'':`${op?op.n:'Rywal'} wykonuje ruch…`;rk.append(w)}
+  $('ok').disabled=!mine||!Object.keys(pend).length;$('sk').disabled=!mine;$('clr').disabled=!mine||!Object.keys(pend).length;
+  $('log').textContent=G.log||'';
+  $('end').hidden=G.st!=='end';
+  if(G.st==='end'){const a=G.sc[me],b=G.sc[1-me];$('et').textContent=G.hot?(a===b?'Remis':(a>b?G.p[me].n:G.p[1-me].n)+' wygrywa'):a>b?'Wygrywasz!':a<b?'Rywal wygrywa':'Remis';$('es').textContent=`${G.p[me].n} ${a} : ${b} ${op?op.n:''}`}
+}
+
+/* ===== STEROWANIE ===== */
+document.addEventListener('keydown',e=>{
+  if(!G||G.st!=='play'||G.cur!==me||e.target.tagName==='INPUT'||!sel)return;
+  if(e.key==='Enter'){e.preventDefault();$('ok').click();return}
+  if(e.key==='Backspace'){const s=lvl.slots[sel.s];let k=sel.k;if(pend[s.idx[k]]===undefined){for(k=sel.k-1;k>=0&&pend[s.idx[k]]===undefined;k--);if(k<0)return;sel.k=k}delete pend[s.idx[sel.k]];render();return}
+  const m={ArrowLeft:-1,ArrowUp:-1,ArrowRight:1,ArrowDown:1}[e.key];
+  if(m){e.preventDefault();const s=lvl.slots[sel.s];sel.k=Math.max(0,Math.min(s.idx.length-1,sel.k+m));render();return}
+  const ch=e.key.toLocaleUpperCase('pl');if(ch.length!==1)return;
+  const k=G.rack.findIndex((l,j)=>l===ch&&!used(j));if(k>=0){place(k);render()}
+});
+$('ok').onclick=()=>commit(letters());
+$('sk').onclick=()=>commit({});
+$('clr').onclick=()=>{pend={};selT=null;render()};
+$('bk').onclick=leave;$('again').onclick=leave;
+$('mk').onclick=()=>create(false);$('hs').onclick=()=>create(true);$('jn').onclick=join;
+$('code').oninput=e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+$('nm').value=ls.g('kd:nm')||'';
+const lvBox=$('lv');
+LEVELS.forEach(L=>{const b=document.createElement('button');b.innerHTML=`<span>${L.n}. ${L.name}</span><small>${L.W-1}×${L.H-1}</small><span class="dots">${'●'.repeat(Math.ceil(L.n/2))}${'○'.repeat(3-Math.ceil(L.n/2))}</span>`;b.setAttribute('aria-pressed',L.n===chosen);b.onclick=()=>{chosen=L.n;ls.s('kd:lv',L.n);[...lvBox.children].forEach((x,i)=>x.setAttribute('aria-pressed',i+1===chosen))};lvBox.append(b)});
+
+setInterval(()=>{
+  if(!G||G.st!=='play'){$('tm').textContent=G&&G.st==='end'?'0:00':'2:00';return}
+  const e=(Date.now()-t0)/1000,l=Math.max(0,Math.ceil(TURN-e));
+  $('tm').textContent=(l/60|0)+':'+String(l%60).padStart(2,'0');$('tm').classList.toggle('low',l<=15);
+  if(Date.now()<retryAt||busy)return;
+  if(G.cur===me&&e>=TURN)commit(letters());
+  else if(G.cur!==me&&!G.hot&&e>=TURN+15)commit({},true);
+},500);
+
+(async()=>{
+  try{store=FIREBASE_CONFIG?await firebaseStore(FIREBASE_CONFIG):null}catch(e){say('Firebase nie działa: '+(e.message||e))}
+  if(!store)store=await claudeStore();
+  if(!store)store=localStore();
+  $('mode').textContent='Tryb: '+store.name+(store.name.startsWith('testowy')?'. Gra z drugim urządzeniem wymaga konfiguracji Firebase.':'');
+  const c=ss.g('kd:game');if(c)enter(c);
+})();
+</script>
+</body>
+</html>
