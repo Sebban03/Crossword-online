@@ -33,7 +33,9 @@ input.up{text-transform:uppercase;letter-spacing:.2em}
 .lv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .lv button{background:var(--cell);color:var(--ink);border:2px solid var(--line);padding:10px 6px;display:grid;gap:2px;font-size:14px}
 .lv button small{font-weight:600;color:var(--mut);font-size:11px}
-.lv button[aria-pressed="true"]{border-color:var(--me);background:color-mix(in srgb,var(--me) 14%,var(--cell))}
+.lv button[aria-pressed="true"],.tt button[aria-pressed="true"]{border-color:var(--me);background:color-mix(in srgb,var(--me) 14%,var(--cell))}
+.tt{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tt button{background:var(--cell);color:var(--ink);border:2px solid var(--line);padding:10px 6px;font-size:14px}
 .dots{letter-spacing:2px;color:var(--op);font-size:10px}
 #msg{min-height:1.3em;color:var(--bad);margin:0;font-weight:600}
 .mode{font-size:12px;color:var(--mut);text-align:center;margin:0}
@@ -109,6 +111,8 @@ input.up{text-transform:uppercase;letter-spacing:.2em}
   <div class="box">
     <h2>Nowa gra</h2>
     <div id="lv" class="lv"></div>
+    <h2>Czas na turę</h2>
+    <div id="tt" class="tt" role="group" aria-label="Czas na turę"></div>
     <button id="mk">Utwórz grę i pokaż kod</button>
     <button id="hs" class="sec">Gra na jednym urządzeniu</button>
   </div>
@@ -118,7 +122,8 @@ input.up{text-transform:uppercase;letter-spacing:.2em}
   </div>
   <p id="msg" role="status"></p>
   <details class="rules"><summary>Zasady</summary><ul>
-    <li>Tura trwa 2 minuty. Dostajesz 5 losowych liter, które gdzieś pasują do planszy.</li>
+    <li>Czas na turę wybiera osoba, która tworzy grę (od 15 do 180 sekund).</li>
+    <li>Masz 5 losowych liter, które gdzieś pasują do planszy. Litery, których nie użyjesz, zostają Ci na kolejną turę, a brakujące są dolosowywane.</li>
     <li>Wybierz kratkę i literę (albo odwrotnie). Na komputerze możesz pisać z klawiatury.</li>
     <li>+1 za dobrą literę, −1 za złą (zła znika z planszy).</li>
     <li>Dokończenie hasła daje premię zależną od długości.</li>
@@ -137,6 +142,7 @@ input.up{text-transform:uppercase;letter-spacing:.2em}
   <div id="lobby" class="lobby" hidden>
     <p>Kod gry dla rywala</p>
     <div id="cd" class="code"></div>
+    <p id="ltt" class="sub"></p>
     <p class="sub">Rywal otwiera tę stronę na swoim telefonie lub laptopie, wpisuje kod i wybiera Dołącz. Gra wystartuje sama.</p>
   </div>
   <div id="board" class="board" hidden>
@@ -165,8 +171,9 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "770011004168",
   appId: "1:770011004168:web:b35cb5f79152340159c0bd"
 };
-const TURN = 120;                 // sekundy na turę
-const RACK = 5;                   // liter na turę
+const TURNS = [15, 30, 45, 60, 90, 120, 180];  // dostępne czasy tury w sekundach
+const DEFAULT_TURN = 120;         // domyślny czas tury
+const RACK = 5;                   // ile liter masz na początku każdej tury
 const SCORE = {
   letter: 1,                      // za dobrą literę
   wrong: -1,                      // za złą literę
@@ -223,7 +230,10 @@ function localStore(){
 /* ===== GRA ===== */
 const $=id=>document.getElementById(id);
 const myId=ss.g('kd:id')||Math.random().toString(36).slice(2,10);ss.s('kd:id',myId);
-let store,code,G,me,lvl,unsub,lastT=-1,t0=0,pend={},selT=null,sel=null,busy=false,retryAt=0,chosen=+(ls.g('kd:lv')||1),flash=new Set();
+let store,code,G,me,lvl,unsub,lastT=-1,t0=0,pend={},selT=null,sel=null,busy=false,retryAt=0,chosen=+(ls.g('kd:lv')||1),chosenTT=+(ls.g('kd:tt')||DEFAULT_TURN),flash=new Set();
+if(!TURNS.includes(chosenTT))chosenTT=DEFAULT_TURN;
+const clock=s=>(s/60|0)+':'+String(s%60).padStart(2,'0');
+const lab=s=>`${s} s`;
 
 function prep(L){
   if(L.ready)return L;
@@ -236,16 +246,22 @@ function prep(L){
 const empty=i=>G.fill[i]==='.';
 const slotDone=(s,f=G.fill)=>s.idx.every(i=>f[i]!=='.');
 const used=k=>Object.values(pend).includes(k);
-const letters=()=>Object.fromEntries(Object.entries(pend).map(([i,k])=>[i,G.rack[k]]));
+const myRack=()=>[...G.racks[me]];
+const letters=()=>({...pend});            // pole -> numer litery w Twoim zestawie
+const tturn=()=>G.tt||DEFAULT_TURN;
 const nm=()=>{const v=$('nm').value.trim().slice(0,12)||'Gracz';ls.s('kd:nm',v);return v};
 const say=t=>$('msg').textContent=t;
 
-function draw(L,f){
-  const a=[];for(let i=0;i<L.sol.length;i++)if(L.sol[i]&&f[i]==='.')a.push(L.sol[i]);
-  for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}
-  return a.slice(0,RACK);
+// Zestaw liter gracza: litery z poprzedniej tury, które nadal są potrzebne, zostają na swoich miejscach,
+// a brakujące do RACK są dolosowywane spośród liter, których wciąż brakuje na planszy.
+function refill(L,f,cur){
+  const need={};for(let i=0;i<L.sol.length;i++)if(L.sol[i]&&f[i]==='.')need[L.sol[i]]=(need[L.sol[i]]||0)+1;
+  const keep=[];for(const ch of [...cur])if(need[ch]>0){need[ch]--;keep.push(ch)}
+  const pool=[];for(const ch in need)for(let k=0;k<need[ch];k++)pool.push(ch);
+  for(let i=pool.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[pool[i],pool[j]]=[pool[j],pool[i]]}
+  return keep.concat(pool.slice(0,Math.max(0,RACK-keep.length))).join('');
 }
-function fresh(L,p){return{lvl:L.n,p,st:p[1]?'play':'wait',t:p[1]?1:0,cur:0,fill:'.'.repeat(L.W*L.H),own:'.'.repeat(L.W*L.H),sc:[0,0],sk:[0,0],rack:p[1]?draw(L,'.'.repeat(L.W*L.H)):[],idle:0,hint:-1,log:p[1]?'Gra się rozpoczęła':'',hot:!!p[1]&&p[1].id===p[0].id}}
+function fresh(L,p,tt){const e='.'.repeat(L.W*L.H),on=!!p[1];return{lvl:L.n,p,tt,st:on?'play':'wait',t:on?1:0,cur:0,fill:e,own:e,sc:[0,0],sk:[0,0],racks:on?[refill(L,e,''),refill(L,e,'')]:['',''],idle:0,hint:-1,log:on?'Gra się rozpoczęła':'',hot:on&&p[1].id===p[0].id}}
 
 async function create(hot){
   say('');const L=prep(LEVELS[chosen-1]);const A='ABCDEFGHJKLMNPRSTUWXYZ';
@@ -253,7 +269,7 @@ async function create(hot){
     for(let k=0;k<8;k++){
       const c=Array.from({length:4},()=>A[Math.random()*A.length|0]).join('');
       const p=hot?[{id:myId,n:'Gracz 1'},{id:myId,n:'Gracz 2'}]:[{id:myId,n:nm()},null];
-      if(await store.create(c,fresh(L,p)))return enter(c);
+      if(await store.create(c,fresh(L,p,chosenTT)))return enter(c);
     }
     say('Nie udało się utworzyć gry, spróbuj ponownie');
   }catch(e){say('Błąd połączenia: '+(e.message||e))}
@@ -266,7 +282,7 @@ async function join(){
       if(g.p.some(x=>x&&x.id===myId)){why='';return null}
       if(g.p[1]){why='Ta gra ma już dwóch graczy';return null}
       const L=prep(LEVELS[g.lvl-1]);why='';
-      return{p:[g.p[0],{id:myId,n:nm()}],st:'play',t:1,cur:Math.random()<.5?0:1,rack:draw(L,g.fill),log:'Gra się rozpoczęła'};
+      return{p:[g.p[0],{id:myId,n:nm()}],st:'play',t:1,cur:Math.random()<.5?0:1,racks:[refill(L,g.fill,''),refill(L,g.fill,'')],log:'Gra się rozpoczęła'};
     });
     if(r||why==='')return enter(c);say(why);
   }catch(e){say('Błąd połączenia: '+(e.message||e))}
@@ -275,6 +291,7 @@ function enter(c){
   code=c;ss.s('kd:game',c);unsub&&unsub();lastT=-1;
   unsub=store.watch(c,g=>{
     if(!g){leave();say('Gra już nie istnieje');return}
+    if(!g.racks){leave();say('Ta gra pochodzi ze starej wersji. Utwórz nową grę.');return}
     const hot=g.hot,i=hot?g.cur:g.p.findIndex(x=>x&&x.id===myId);if(i<0){leave();say('Nie jesteś graczem tej gry');return}
     const newT=g.t!==lastT;
     if(G&&newT){for(let x=0;x<g.fill.length;x++)if(G.fill[x]==='.'&&g.fill[x]!=='.')flash.add(x)}
@@ -288,11 +305,11 @@ function pickStart(){const s=lvl.slots.find(s=>!slotDone(s))||lvl.slots[0];retur
 
 /* ===== RUCH I PUNKTACJA ===== */
 function score(g,pl){
-  const L=prep(LEVELS[g.lvl-1]),w=g.cur,fill=[...g.fill],own=[...g.own],sc=[...g.sc],sk=[...g.sk];let ok=0,bad=0;
-  for(const k in pl){const i=+k;if(!L.sol[i]||fill[i]!=='.')continue;if(pl[k]===L.sol[i]){fill[i]=L.sol[i];own[i]=String(w);ok++}else bad++}
+  const L=prep(LEVELS[g.lvl-1]),w=g.cur,fill=[...g.fill],own=[...g.own],sc=[...g.sc],sk=[...g.sk],mine=[...g.racks[w]],spent=new Set();let ok=0,bad=0;
+  for(const k in pl){const i=+k,t=pl[k];if(!L.sol[i]||fill[i]!=='.'||spent.has(t)||!(t in mine))continue;spent.add(t);if(mine[t]===L.sol[i]){fill[i]=L.sol[i];own[i]=String(w);ok++}else bad++}
   let gain=ok*SCORE.letter+bad*SCORE.wrong,words=[];
   L.slots.forEach(s=>{if(slotDone(s,fill)&&!slotDone(s,g.fill)){gain+=SCORE.word(s.len);words.push(s.w.join(''))}});
-  sk[w]=g.rack.length>0&&ok===g.rack.length&&bad===0?sk[w]+1:0;
+  sk[w]=mine.length>0&&ok===mine.length&&bad===0?sk[w]+1:0;
   const sb=SCORE.streak(sk[w]);gain+=sb;sc[w]+=gain;
   const f=fill.join(''),open=L.slots.filter(s=>!slotDone(s,f));
   let idle=ok<=1?g.idle+1:0,hint=g.hint;
@@ -301,7 +318,9 @@ function score(g,pl){
   const who=g.p[w].n;
   let log=pl&&Object.keys(pl).length?`${who}: ${ok} dobrych, ${bad} złych, ${gain>=0?'+':''}${gain} pkt`:`${who} pomija turę`;
   if(words.length)log+=` · hasła ${words.join(', ')}`;if(sb)log+=` · seria +${sb}`;
-  return{fill:f,own:own.join(''),sc,sk,idle,hint,cur:1-w,t:g.t+1,st:open.length?'play':'end',rack:open.length?draw(L,f):[],log};
+  // niewykorzystane litery zostają, a zestaw rywala (który zaraz zaczyna turę) jest uzupełniany do RACK
+  const racks=[...g.racks];racks[w]=open.length?mine.filter((_,t)=>!spent.has(t)).join(''):'';racks[1-w]=open.length?refill(L,f,g.racks[1-w]):'';
+  return{fill:f,own:own.join(''),sc,sk,idle,hint,cur:1-w,t:g.t+1,st:open.length?'play':'end',racks,log};
 }
 async function commit(pl,forced){
   if(busy||!G||G.st!=='play')return;busy=true;const T=G.t;
@@ -355,7 +374,7 @@ function tapTile(k){if(used(k)||!sel)return;place(k);render()}
 function render(){
   $('menu').hidden=!!G;$('game').hidden=!G;if(!G)return;
   const play=G.st==='play',mine=play&&G.cur===me,op=G.p[1-me],L=lvl;
-  $('lobby').hidden=G.st!=='wait';$('board').hidden=G.st==='wait';$('cd').textContent=code;
+  $('lobby').hidden=G.st!=='wait';$('board').hidden=G.st==='wait';$('cd').textContent=code;$('ltt').textContent='Czas na turę: '+lab(tturn());
   $('n0').textContent=G.hot?G.p[me].n+' (tura)':G.p[me].n+' (Ty)';$('n1').textContent=op?op.n:'czekam…';
   $('s0').textContent=G.sc[me];$('s1').textContent=G.sc[1-me];
   $('p0').classList.toggle('act',mine);$('p1').classList.toggle('act',play&&!mine);
@@ -367,14 +386,14 @@ function render(){
     if(el.classList.contains('q')){[...el.children].forEach(p=>p.classList.toggle('on',s&&+p.dataset.s===s.i));continue}
     const f=G.fill[i],tl=el.firstChild,pd=pend[i]!==undefined;
     el.className='c'+(f!=='.'?(G.own[i]==me?' me':' op'):pd?' pend':'')+(hs.has(i)?' hl':'')+(s&&s.idx[sel.k]===i?' sl':'')+(flash.has(i)?' flash':'')+(f==='.'&&!pd&&hset.has(i)?' ghost':'');
-    if(f!=='.'||pd){tl.hidden=false;tl.textContent=f!=='.'?f:G.rack[pend[i]];el.childNodes[1]&&el.childNodes[1].remove()}
+    if(f!=='.'||pd){tl.hidden=false;tl.textContent=f!=='.'?f:myRack()[pend[i]];el.childNodes[1]&&el.childNodes[1].remove()}
     else{tl.hidden=true;let t=el.childNodes[1];const gtxt=hset.has(i)?L.sol[i]:'';if(gtxt){if(!t){t=document.createTextNode('');el.append(t)}t.textContent=gtxt}else if(t)t.remove()}
   }
   $('strip').innerHTML='';
   if(s){const ar=document.createElement('i');ar.textContent=s.d?'↓':'→';const tx=document.createElement('span');tx.textContent=s.q;const ln=document.createElement('em');ln.textContent=`${s.len} liter`+(hint===s?` · podpowiedź`:'');$('strip').append(ar,tx,ln)}
   if(hint&&hint!==s){const h=document.createElement('em');h.textContent='Podpowiedź na planszy';$('strip').append(h)}
   const rk=$('rack');rk.innerHTML='';
-  if(mine)G.rack.forEach((l,k)=>{const b=document.createElement('button');b.className='tile'+(selT===k?' on':'')+(used(k)?' used':'');b.textContent=l;b.disabled=used(k);b.onclick=()=>tapTile(k);rk.append(b)});
+  if(mine)myRack().forEach((l,k)=>{const b=document.createElement('button');b.className='tile'+(selT===k?' on':'')+(used(k)?' used':'');b.textContent=l;b.disabled=used(k);b.onclick=()=>tapTile(k);rk.append(b)});
   else if(play){const w=document.createElement('div');w.className='waitmsg';w.textContent=G.hot?'':`${op?op.n:'Rywal'} wykonuje ruch…`;rk.append(w)}
   $('ok').disabled=!mine||!Object.keys(pend).length;$('sk').disabled=!mine;$('clr').disabled=!mine||!Object.keys(pend).length;
   $('log').textContent=G.log||'';
@@ -390,7 +409,7 @@ document.addEventListener('keydown',e=>{
   const m={ArrowLeft:-1,ArrowUp:-1,ArrowRight:1,ArrowDown:1}[e.key];
   if(m){e.preventDefault();const s=lvl.slots[sel.s];sel.k=Math.max(0,Math.min(s.idx.length-1,sel.k+m));render();return}
   const ch=e.key.toLocaleUpperCase('pl');if(ch.length!==1)return;
-  const k=G.rack.findIndex((l,j)=>l===ch&&!used(j));if(k>=0){place(k);render()}
+  const k=myRack().findIndex((l,j)=>l===ch&&!used(j));if(k>=0){place(k);render()}
 });
 $('ok').onclick=()=>commit(letters());
 $('sk').onclick=()=>commit({});
@@ -399,16 +418,18 @@ $('bk').onclick=leave;$('again').onclick=leave;
 $('mk').onclick=()=>create(false);$('hs').onclick=()=>create(true);$('jn').onclick=join;
 $('code').oninput=e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
 $('nm').value=ls.g('kd:nm')||'';
+const ttBox=$('tt');
+TURNS.forEach(s=>{const b=document.createElement('button');b.textContent=lab(s);b.setAttribute('aria-pressed',s===chosenTT);b.onclick=()=>{chosenTT=s;ls.s('kd:tt',s);[...ttBox.children].forEach((x,i)=>x.setAttribute('aria-pressed',TURNS[i]===chosenTT))};ttBox.append(b)});
 const lvBox=$('lv');
 LEVELS.forEach(L=>{const b=document.createElement('button');b.innerHTML=`<span>${L.n}. ${L.name}</span><small>${L.W-1}×${L.H-1}</small><span class="dots">${'●'.repeat(Math.ceil(L.n/2))}${'○'.repeat(3-Math.ceil(L.n/2))}</span>`;b.setAttribute('aria-pressed',L.n===chosen);b.onclick=()=>{chosen=L.n;ls.s('kd:lv',L.n);[...lvBox.children].forEach((x,i)=>x.setAttribute('aria-pressed',i+1===chosen))};lvBox.append(b)});
 
 setInterval(()=>{
-  if(!G||G.st!=='play'){$('tm').textContent=G&&G.st==='end'?'0:00':'2:00';return}
-  const e=(Date.now()-t0)/1000,l=Math.max(0,Math.ceil(TURN-e));
-  $('tm').textContent=(l/60|0)+':'+String(l%60).padStart(2,'0');$('tm').classList.toggle('low',l<=15);
+  if(!G||G.st!=='play'){$('tm').textContent=G&&G.st==='end'?'0:00':clock(G?tturn():DEFAULT_TURN);$('tm').classList.remove('low');return}
+  const T=tturn(),e=(Date.now()-t0)/1000,l=Math.max(0,Math.ceil(T-e));
+  $('tm').textContent=clock(l);$('tm').classList.toggle('low',l<=Math.min(15,T/4));
   if(Date.now()<retryAt||busy)return;
-  if(G.cur===me&&e>=TURN)commit(letters());
-  else if(G.cur!==me&&!G.hot&&e>=TURN+15)commit({},true);
+  if(G.cur===me&&e>=T)commit(letters());
+  else if(G.cur!==me&&!G.hot&&e>=T+15)commit({},true);
 },500);
 
 (async()=>{
